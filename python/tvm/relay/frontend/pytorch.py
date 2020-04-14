@@ -625,7 +625,8 @@ def _transpose():
             axes[src] = dst
             axes[dst] = src
         else:
-            axes = inputs[1]
+            axes = _infer_shape(inputs[1])
+
         return _op.transform.transpose(data, axes)
     return _impl
 
