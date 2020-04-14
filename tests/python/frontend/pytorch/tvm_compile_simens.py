@@ -39,6 +39,9 @@ def copyStateDict(state_dict):
 # We can also load models from MXNet, ONNX and TensorFlow.
 
 def assert_shapes_match(tru, est):
+    print(tru.shape)
+    print(est.shape)
+    print(tru.shape == est.shape)
     if tru.shape != est.shape:
         msg = "Output shapes {} and {} don't match"
         raise AssertionError(msg.format(tru.shape, est.shape))
@@ -51,12 +54,12 @@ def get_network(batch_size):
         output_shape = (batch_size, 1000)
         print(input_shape)
         input_data = torch.randn(input_shape)
-        #net = CRAFT()
+        net = CRAFT()
         print('Loading weights from checkpoint')
-        #net.load_state_dict(copyStateDict(torch.load(filename, map_location='cpu')))
-        #net.eval()
-        #trace = torch.jit.trace(net, input_data).eval()
-        trace = torch.jit.load('saved_craft_mlt_25k.pth')
+        net.load_state_dict(copyStateDict(torch.load(filename, map_location='cpu')))
+        net.eval()
+        trace = torch.jit.trace(net, input_data).eval()
+        #trace = torch.jit.load('saved_craft_mlt_25k.pth')
         #torch.jit.save(trace, 'saved_craft_mlt_25k.pth')
         input_name = "input0"
         input_names = [input_name]
