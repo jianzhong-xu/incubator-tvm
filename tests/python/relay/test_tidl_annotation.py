@@ -35,6 +35,7 @@ from tvm.relay.frontend.darknet import ACTIVATION
 import mxnet as mx
 from gluoncv import model_zoo, data, utils
 from tidl_prune_subgraphs_example_v2 import PruneSubgraphs
+import gluoncv
 
 # Darknet
 REPO_URL = 'https://github.com/dmlc/web-data/blob/master/darknet/'
@@ -345,9 +346,53 @@ def test_tidl_mobilenet_no_composite():
             mod4 = transform.PartitionGraph()(mod4)
             print(mod4.astext(show_meta_data=False))
 
+def test_gluoncv_segmentation():
+    model_list = {
+        'fcn_resnet50_ade' : 'fcn_resnet50_ade',
+        #'fcn_resnet101_ade' : 'fcn_resnet101_ade',
+        'psp_resnet50_ade' : 'psp_resnet50_ade',
+        #'psp_resnet101_ade' : 'psp_resnet101_ade',
+        'fcn_resnet101_coco' : 'fcn_resnet101_coco',
+        'psp_resnet101_coco' : 'psp_resnet101_coco',
+        'fcn_resnet101_voc' : 'fcn_resnet101_voc',
+        'psp_resnet101_voc' : 'psp_resnet101_voc',
+        'psp_resnet101_citys' : 'psp_resnet101_citys',
+        'mask_rcnn_resnet18_v1b_coco' : 'mask_rcnn_resnet18_v1b_coco',
+        'mask_rcnn_fpn_resnet18_v1b_coco' : 'mask_rcnn_fpn_resnet18_v1b_coco',
+        #'mask_rcnn_resnet50_v1b_coco' : 'mask_rcnn_resnet50_v1b_coco',
+        #'mask_rcnn_fpn_resnet50_v1b_coco' : 'mask_rcnn_fpn_resnet50_v1b_coco',
+        #'mask_rcnn_resnet101_v1d_coco' : 'mask_rcnn_resnet101_v1d_coco',
+        #'mask_rcnn_fpn_resnet101_v1d_coco' : 'mask_rcnn_fpn_resnet101_v1d_coco',
+    }
+
+    for model_name in model_list:
+        print(model_name)
+        model = gluoncv.model_zoo.get_model(model_name, pretrained=True)
+        mod, params = relay.frontend.from_mxnet(model, {'data':(1,3,480,480)})
+
+        print('---------- Original Graph ----------')
+        mod = relay.transform.RemoveUnusedFunctions()(mod)
+        print(mod.astext(show_meta_data=False))
+        print('---------- Merge Composite Functions ----------')
+        mod = tvm.relay.op.contrib.tidl._merge_sequential_ops(mod) #Merge sequence of ops into composite functions/ops
+        print(mod.astext(show_meta_data=False))
+        print("---------- Annotated Graph ----------")
+        mod = transform.AnnotateTarget("tidl")(mod) #Looks at annotated ops and marks them in the graph with compiler.begin and compiler.end
+        print(mod.astext(show_meta_data=False))
+        print("---------- Merge Compiler Regions ----------")
+        mod = transform.MergeCompilerRegions()(mod) #Merge annotated regions together that use the same external target, combines marked regions for each target
+        print(mod.astext(show_meta_data=False))
+        print("---------- Partioned Graph ----------")
+        mod = transform.PartitionGraph()(mod)
+        print(mod.astext(show_meta_data=False))
+        print("---------- Pruned Graph ----------")
+        mod = PruneSubgraphs(mod, compiler="tidl", num_subgraphs_to_keep=4)
+        print(mod.astext(show_meta_data=False))
+
 if __name__ == '__main__':
     #test_tidl_annotation()
-    test_tidl_mobilenet()
+    #test_tidl_mobilenet()
     #test_tidl_mobilenet_no_composite()
-    test_tidl_yolo()
-    test_mxnet_mobilenet_ssd()
+    #test_tidl_yolo()
+    #test_mxnet_mobilenet_ssd()
+    test_gluoncv_segmentation()
