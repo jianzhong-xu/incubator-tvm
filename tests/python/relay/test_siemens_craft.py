@@ -13,6 +13,7 @@ from tvm.contrib import graph_runtime
 import tvm.relay.op.contrib.tidl
 from tvm.relay import transform
 from craft import CRAFT
+from tidl_prune_subgraphs_example_v2 import PruneSubgraphs
 
 from collections import OrderedDict
 
