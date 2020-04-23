@@ -10,7 +10,8 @@ import tvm.contrib.graph_runtime as runtime
 import torch
 from tvm.relay.testing.config import ctx_list
 from tvm.contrib import graph_runtime
-
+import tvm.relay.op.contrib.tidl
+from tvm.relay import transform
 from craft import CRAFT
 
 from collections import OrderedDict
@@ -67,13 +68,14 @@ def get_network(batch_size):
         print('Import graph to relay')
         mod, params = relay.frontend.from_pytorch(trace, [(input_name, input_shape)])
 
+        """
+        #Check accuracy
         baseline_outputs = trace.forward(input_data)
         print(baseline_outputs)
         baseline_outputs = tuple(out.cpu().numpy() for out in baseline_outputs)
         compiled_input = dict(zip(input_names,
                                   [inp.cpu().numpy() for inp in baseline_input]))
 
-        #Check accuracy
         with relay.build_config(opt_level=3):
             for target, ctx in ctx_list():
                 relay_graph, relay_lib, relay_params = relay.build(mod, target=target, params=params)
@@ -90,6 +92,7 @@ def get_network(batch_size):
                     tvm.testing.assert_allclose(baseline_output, compiled_output,
                                                 rtol=1e-3, atol=1e-3)
                 print('No accuracy issues')
+        """
 
         return mod, params
 
@@ -97,6 +100,26 @@ def compile():
     # extract workloads from relay program
     mod, params = get_network(batch_size=1)
 
+    print('---------- Original Graph ----------')
+    mod = relay.transform.RemoveUnusedFunctions()(mod)
+    print(mod.astext(show_meta_data=False))
+    print('---------- Merge Composite Functions ----------')
+    mod = tvm.relay.op.contrib.tidl._merge_sequential_ops(mod) #Merge sequence of ops into composite functions/ops
+    print(mod.astext(show_meta_data=False))
+    print("---------- Annotated Graph ----------")
+    mod = transform.AnnotateTarget("tidl")(mod) #Looks at annotated ops and marks them in the graph with compiler.begin and compiler.end
+    print(mod.astext(show_meta_data=False))
+    print("---------- Merge Compiler Regions ----------")
+    mod = transform.MergeCompilerRegions()(mod) #Merge annotated regions together that use the same external target, combines marked regions for each target
+    print(mod.astext(show_meta_data=False))
+    print("---------- Partioned Graph ----------")
+    mod = transform.PartitionGraph()(mod)
+    print(mod.astext(show_meta_data=False))
+    print("---------- Pruned Graph ----------")
+    mod = PruneSubgraphs(mod, compiler="tidl", num_subgraphs_to_keep=4)
+    print(mod.astext(show_meta_data=False))
+
+    """
     print("Compile...")
     with relay.build_config(opt_level=3):
         graph, lib, params = relay.build_module.build(
@@ -108,6 +131,6 @@ def compile():
         fo.write(graph)
     with open("deploy_param.params", "wb") as fo:
         fo.write(relay.save_param_dict(params))
+    """
 
-#TODO: Remove this file before PR
 compile()
