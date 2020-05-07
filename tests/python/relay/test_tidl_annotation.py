@@ -395,4 +395,4 @@ if __name__ == '__main__':
     #test_tidl_mobilenet_no_composite()
     #test_tidl_yolo()
     #test_mxnet_mobilenet_ssd()
-    test_gluoncv_segmentation()
+    #test_gluoncv_segmentation()

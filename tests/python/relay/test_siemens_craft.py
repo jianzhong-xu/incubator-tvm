@@ -69,6 +69,9 @@ def get_network(batch_size):
         print('Import graph to relay')
         mod, params = relay.frontend.from_pytorch(trace, [(input_name, input_shape)])
 
+        from tvm.relay.build_module import bind_params_by_name
+        mod['main'] = bind_params_by_name(mod['main'], params)
+
         """
         #Check accuracy
         baseline_outputs = trace.forward(input_data)
@@ -120,6 +123,12 @@ def compile():
     mod = PruneSubgraphs(mod, compiler="tidl", num_subgraphs_to_keep=4)
     print(mod.astext(show_meta_data=False))
 
+    json_str = tvm.ir.save_json(mod)
+
+    import json
+    with open('mod.json', 'w') as outfile:
+        json.dump(json_str, outfile)
+
     """
     print("Compile...")
     with relay.build_config(opt_level=3):
@@ -135,3 +144,11 @@ def compile():
     """
 
 compile()
+
+
+import json
+
+with open('mod.json') as json_file:
+    newmod = json.load(json_file)
+
+newmod = tvm.ir.load_json(newmod)
