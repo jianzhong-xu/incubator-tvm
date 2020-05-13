@@ -120,13 +120,13 @@ def compile():
     mod = transform.PartitionGraph()(mod)
     print(mod.astext(show_meta_data=False))
     print("---------- Pruned Graph ----------")
-    mod = PruneSubgraphs(mod, compiler="tidl", num_subgraphs_to_keep=4)
+    mod = PruneSubgraphs(mod, compiler="tidl", num_subgraphs_to_keep=1)
     print(mod.astext(show_meta_data=False))
 
     json_str = tvm.ir.save_json(mod)
 
     import json
-    with open('mod.json', 'w') as outfile:
+    with open('craft.json', 'w') as outfile:
         json.dump(json_str, outfile)
 
     """
