@@ -242,7 +242,7 @@ def _clip_whitelist_fn(attrs, args):
 
 @reg.register("concatenate", "target.tidl")
 def _concatenate_whitelist_fn(attrs, args):
-    supported = (attrs.axis == 1)
+    supported = (attrs.axis == 1) or (attrs.axis == 3)
     return supported
 
 @reg.register("nn.conv2d", "target.tidl")
@@ -294,15 +294,14 @@ def _dropout_whitelist_fn(attrs, args):
 
 @reg.register("nn.global_avg_pool2d", "target.tidl")
 def _global_avg_pool_whitelist_fn(attrs, args):
-    data = args[1]
-    data_shape  = get_const_tuple(infer_shape(data))
+    data = args[0].checked_type
     layout = attrs.layout
     if layout == "NCHW":
-        height = data_shape[2]
-        width  = data_shape[3]
+        height = data.shape[2]
+        width  = data.shape[3]
     else:
-        height = data_shape[1]
-        width  = data_shape[2]
+        height = data.shape[1]
+        width  = data.shape[2]
     supported = (height * width <= 4096)
     return supported
 

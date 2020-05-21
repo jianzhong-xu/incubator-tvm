@@ -317,7 +317,7 @@ def generate_subgraph_tensors(mod, params, input_node, input_data):
     my_mutator = tidl.CalibrationGraphMutator("tidl")
     mod_tvm["main"] = my_mutator.make_calibration_graph(mod_tvm["main"])
     print("---------- Calibration module: ---------", mod_tvm)
-    print(mod_tvm)
+    #print(mod_tvm)
     print("Input/output map:", my_mutator.name_map)
 
     # Build and execute calibration graph to get outputs
@@ -344,7 +344,7 @@ def generate_subgraph_tensors(mod, params, input_node, input_data):
         if i in my_mutator.name_map:
             subgraph_tensors[my_mutator.name_map[i]]=results[i]
             file_name = my_mutator.name_map[i] + ".txt"
-            np.savetxt(file_name, results[i].flatten(), fmt='%10.5f')
+            #np.savetxt(file_name, results[i].flatten(), fmt='%10.5f')
         else: # full graph output
             file_name = "graph_out_" + str(i) + ".txt"
             np.savetxt(file_name, results[i].flatten(), fmt='%10.5f')
@@ -390,15 +390,10 @@ def test_mxnet_mobilenet_ssd():
         np.savetxt("graph_out_"+str(i)+".txt", results[i].flatten(), fmt='%10.5f')
 
 
-#    block.hybridize()
-#    block.forward(x)
-#    block.export('temp')    # create file temp-symbol.json
-#    #with open('temp-symbol.json') as f:
-#    #    model_json = json.load(f)
-#    #model_json["heads"] = [[700, 0, 0]]
-#    #with open('temp-symbol.json', 'w') as json_file:
-#    #    json.dump(model_json, json_file)
-#
+    block.hybridize()
+    block.forward(x)
+    block.export('temp')    # create file temp-symbol.json
+
 #    model_json = mx.symbol.load('temp-symbol.json')
 #    save_dict = mx.ndarray.load('temp-0000.params')
 #    arg_params = {}
@@ -478,10 +473,10 @@ def test_gluoncv_segmentation():
         #'fcn_resnet101_voc' : 'fcn_resnet101_voc',
         #'psp_resnet101_voc' : 'psp_resnet101_voc',
         #'psp_resnet101_citys' : 'psp_resnet101_citys',
-        #'mask_rcnn_resnet18_v1b_coco' : 'mask_rcnn_resnet18_v1b_coco', #cannot find the corresponding key in the Map
-        #'mask_rcnn_fpn_resnet18_v1b_coco' : 'mask_rcnn_fpn_resnet18_v1b_coco', #cannot find the corresponding key in the Map
-        #'mask_rcnn_resnet50_v1b_coco' : 'mask_rcnn_resnet50_v1b_coco', #cannot find the corresponding key in the Map
-        'mask_rcnn_fpn_resnet50_v1b_coco' : 'mask_rcnn_fpn_resnet50_v1b_coco', #cannot find the corresponding key in the Map
+        'mask_rcnn_resnet18_v1b_coco' : 'mask_rcnn_resnet18_v1b_coco', 
+        #'mask_rcnn_fpn_resnet18_v1b_coco' : 'mask_rcnn_fpn_resnet18_v1b_coco', 
+        #'mask_rcnn_resnet50_v1b_coco' : 'mask_rcnn_resnet50_v1b_coco', 
+        #'mask_rcnn_fpn_resnet50_v1b_coco' : 'mask_rcnn_fpn_resnet50_v1b_coco',        
         #'mask_rcnn_resnet101_v1d_coco' : 'mask_rcnn_resnet101_v1d_coco',
         #'mask_rcnn_fpn_resnet101_v1d_coco' : 'mask_rcnn_fpn_resnet101_v1d_coco',
     }
@@ -513,16 +508,17 @@ def test_gluoncv_segmentation():
         print(mod.astext(show_meta_data=False))
         print('---------- Merge Composite Functions ----------')
         mod = tvm.relay.op.contrib.tidl._merge_sequential_ops(mod) #Merge sequence of ops into composite functions/ops
-        print(mod.astext(show_meta_data=False))
+        #print(mod.astext(show_meta_data=False))
         print("---------- Annotated Graph ----------")
         mod = transform.AnnotateTarget("tidl")(mod) #Looks at annotated ops and marks them in the graph with compiler.begin and compiler.end
-        print(mod.astext(show_meta_data=False))
+        #print(mod.astext(show_meta_data=False))
         print("---------- Merge Compiler Regions ----------")
         mod = transform.MergeCompilerRegions()(mod) #Merge annotated regions together that use the same external target, combines marked regions for each target
-        print(mod.astext(show_meta_data=False))
+        #print(mod.astext(show_meta_data=False))
         print("---------- Partioned Graph ----------")
         mod = transform.PartitionGraph()(mod)
-        print(mod.astext(show_meta_data=False))
+        mod = UnpackComposites(mod, "tidl")
+        #print(mod.astext(show_meta_data=False))
         print("---------- Pruned Graph ----------")
         mod = PruneSubgraphs(mod, compiler="tidl", num_subgraphs_to_keep=1)
         print(mod.astext(show_meta_data=False))
@@ -557,8 +553,8 @@ if __name__ == '__main__':
         sys.exit("Environment variable TIDL_TOOLS_PATH not set!")
     else:
         tidl_tools_path = os.getenv("TIDL_TOOLS_PATH")
-    arm_gcc          = arm_gcc_path + "arm-linux-gnueabihf-g++"
-    tidl_calib_tool  = tidl_tools_path + "eve_test_dl_algo_ref.out"
+    arm_gcc          = os.path.join(arm_gcc_path, "arm-linux-gnueabihf-g++")
+    tidl_calib_tool  = os.path.join(tidl_tools_path, "eve_test_dl_algo_ref.out")
 
     artifacts_folder = "./artifacts/"
     if os.path.isdir(artifacts_folder):

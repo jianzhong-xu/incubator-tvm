@@ -421,6 +421,8 @@ class PoolingParams(ctypes.Structure):
                 ('padH',    ctypes.c_int),
                 ('padW',    ctypes.c_int)]
 
+class MulParams(ctypes.Structure):
+    _fields_ = [('scale', ctypes.c_float)]
 
 class InOutNodes(ctypes.Structure):
     """ Input/output nodes defined in ctypes for passing to TIDL C library """
@@ -500,7 +502,7 @@ def find_input_nodes(all_nodes, this_node):
         elif isinstance(node, relay.expr.TupleGetItem):
             input_nodes.append(all_nodes[node.tuple_value])
         elif isinstance(node, relay.expr.Tuple):
-            input_nodes.append(find_input_nodes(node))
+            input_nodes = input_nodes + find_input_nodes(all_nodes, node)
         #else: ignore all other types of nodes: var, const, etc.
 
     return input_nodes
@@ -860,9 +862,22 @@ def tidl_import_pooling(node, type):
     """
 
     pooling_params = PoolingParams()
-    (pooling_params.kernelH,pooling_params.kernelW) = node.attrs.pool_size
-    (pooling_params.strideH,pooling_params.strideW) = node.attrs.strides
-    (pooling_params.padH,pooling_params.padW) = node.attrs.padding
+    if node.op.name == "nn.global_avg_pool2d":
+        pooling_params.kernelH = pooling_params.kernelW = 0
+        pooling_params.padH    = pooling_params.padW    = 0
+        pooling_params.strideH = pooling_params.strideW = 1
+    else:
+        (pooling_params.kernelH,pooling_params.kernelW) = node.attrs.pool_size
+        (pooling_params.strideH,pooling_params.strideW) = node.attrs.strides
+        if len(node.attrs.padding) == 4:
+            (pooling_params.padH,pooling_params.padW) = node.attrs.padding[2:4]
+        else:
+            (pooling_params.padH,pooling_params.padW) = node.attrs.padding
+
+    if node.op.name == "nn.avg_pool2d" or node.op.name == "nn.global_avg_pool2d":
+        type = b'avg_pool2d'
+    else:
+        type = b'max_pool2d'
 
     _tidlImportPooling = _tidl_mod.tidlImportPooling
     _tidlImportPooling.argtypes = (ctypes.POINTER(PoolingParams), ctypes.c_char_p)
@@ -879,6 +894,25 @@ def tidl_import_concat(all_nodes, node):
     _tidlImportConcat.argtype = ctypes.c_int
     _tidlImportConcat.restype = None
     _tidlImportConcat(len(in_nodes))
+
+def tidl_import_dense(this_node):
+
+    weights = this_node.args[1]
+    (num_outnodes, num_innodes) = weights.data.shape
+    weights_array = weights.data.asnumpy()
+    _tidlImportDense = _tidl_mod.tidlImportDense
+    _tidlImportDense.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_void_p)
+    _tidlImportDense.restype  = None
+    _tidlImportDense(num_innodes, num_outnodes, ctypes.c_void_p(weights_array.ctypes.data))
+
+def tidl_import_mul(this_node):
+    mul_params = MulParams()
+    scale = this_node.args[0].data.asnumpy()
+    mul_params.scale = np.amax(scale)
+    _tidlImportMul = _tidl_mod.tidlImportMul
+    _tidlImportMul.argtypes = (ctypes.POINTER(MulParams), ctypes.c_void_p)
+    _tidlImportMul.restype = None
+    _tidlImportMul(mul_params, ctypes.POINTER(ctypes.c_int)())
 
 def tidl_import_init(data_layout, input_scale, input_signed, input_shape):
     r""" Initializing TIDL import
@@ -983,6 +1017,19 @@ def tidl_import_node(all_nodes, this_node, params):
         _tidlImportDropOut.argtype = None
         _tidlImportDropOut.restype = None
         _tidlImportDropOut()
+    elif this_node.op.name == 'nn.global_avg_pool2d':
+        status = tidl_import_pooling(this_node, b'avg_pool2d')
+    elif this_node.op.name == 'nn.batch_flatten':
+        _tidlImportBatchFlatten = _tidl_mod.tidlImportBatchFlatten
+        _tidlImportBatchFlatten.argtype = None
+        _tidlImportBatchFlatten.restype = None
+        _tidlImportBatchFlatten()
+    elif this_node.op.name == 'multiply':
+        #print("Importing multiply")
+        tidl_import_mul(this_node)
+    elif this_node.op.name == 'nn.dense':
+        #print("Importing dense")
+        tidl_import_dense(this_node)
     else:
         print("Operator " + this_node.op.name + " is not supported!")
         status = False
@@ -1417,7 +1464,7 @@ class CalibrationGraphMutator(ExprMutator):
         self.additional_outputs.append(expr)
 
     def visit_call(self, call):
-        if isinstance(call.op, Function) and call.op.attrs["Compiler"] == self.compiler:
+        if isinstance(call.op, Function) and "Compiler" in call.op.attrs and call.op.attrs["Compiler"] == self.compiler:
             var_map = {}
             for arg, param in zip(call.args, call.op.params):
                 subgraph_name = "_".join(param.name_hint.split("_")[:2])

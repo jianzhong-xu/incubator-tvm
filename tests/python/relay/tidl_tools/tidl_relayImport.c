@@ -164,7 +164,7 @@ void tidlImportInit(tidlImpConfig * cfg, char * layout)
   orgTIDLNetStructure.TIDLPCLayers[0].layerType = TIDL_DataLayer;
   orgTIDLNetStructure.TIDLPCLayers[0].numInBufs  = -1;
   orgTIDLNetStructure.TIDLPCLayers[0].numOutBufs = 1;
-  //orgTIDLNetStructure.TIDLPCLayers[0].outConsumerCnt[0] = 1;
+  orgTIDLNetStructure.TIDLPCLayers[0].outConsumerCnt[0] = 0;
   strcpy((char*)orgTIDLNetStructure.TIDLPCLayers[0].outDataNames[0], "InputData");
   orgTIDLNetStructure.TIDLPCLayers[0].weightsElementSizeInBits = (int32_t)NUM_WHGT_BITS;
   orgTIDLNetStructure.TIDLPCLayers[0].strideOffsetMethod = (int32_t)TIDL_strideOffsetCenter;
@@ -338,7 +338,7 @@ void tidlImportBatchNorm(BatchNormParams * bn_params, void * ptr_unused)
 #ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
   printf("Number of BN parameters: %d\n", bn_params->num_params); 
   printf("BN parameter data type: %s\n", bn_params->params_dtype); 
-  
+/*
   for(i=0;i<bn_params->num_params;i++)
   {
     printf("%f, ", bn_params->gama[i]);
@@ -359,7 +359,7 @@ void tidlImportBatchNorm(BatchNormParams * bn_params, void * ptr_unused)
     printf("%f, ", bn_params->var[i]);
   }
   printf("\n");
-  
+*/
   printf("BN epsilon: %f\n", bn_params->epsilon); 
   printf("BN center: %d, scale: %d\n", bn_params->center_enable, bn_params->scale_enable); 
 #endif
@@ -491,9 +491,9 @@ void tidlImportBiasAdd(int numParams, char *dtype, void *biasParams)
   if(strcmp(dtype, "float32") == 0) {
 #ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
     printf("BiasAdd params are float32, number of params is %d\n", numParams);
-    for(i=0;i<numParams;i++)
+    float * params = (float *)biasParams;
+    for(i=0;i<10;i++)
     {
-      float * params = (float *)biasParams;
       printf("%f, ", params[i]);
     }
     printf("\n");
@@ -556,6 +556,71 @@ void tidlImportDropOut()
   layer->outData[0].dataId = GET_DATA_INDEX;
 }
 
+void tidlImportBatchFlatten()
+{
+  sTIDL_LayerPC_t *layer;
+
+  TIDL_IMPORT_DBG_PRINT("----- Importing batchFlatten layer ----- \n");
+
+  layer = GET_LAYER_PTR;
+  layer->layerType = TIDL_FlattenLayer;
+  layer->outData[0].dataId = GET_DATA_INDEX;
+}
+
+void tidlImportDense(int num_innodes, int num_outnodes, void *weights)
+{
+  sTIDL_LayerPC_t *layer;
+  sTIDL_InnerProductParams_t *ip_params;
+  size_t size;
+
+  TIDL_IMPORT_DBG_PRINT("----- Importing dense layer ----- \n");
+  layer = GET_LAYER_PTR;
+  layer->layerType = TIDL_InnerProductLayer;
+  layer->outData[0].dataId = GET_DATA_INDEX;
+
+  ip_params = &layer->layerParams.innerProductParams;
+  ip_params->numInNodes = num_innodes;
+  ip_params->numOutNodes= num_outnodes;
+
+#ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
+    printf("Dense params: number of input nodes is %d, number of output nodes is %d\n",
+            num_innodes, num_outnodes);
+    float * params = (float *)weights;
+    int i;
+    for(i=0;i<10;i++)
+    {
+      printf("%f, ", params[i]);
+    }
+    printf("\n");
+#endif
+  // Allocate memory to store weights. To be freed after writing weights to file.
+  size = sizeof(float)*(size_t)num_innodes*num_outnodes;
+  layer->weights.ptr = (float *)my_malloc(size);
+  memcpy(layer->weights.ptr, weights, size);
+
+  /* Set default bias as zero, if next layer has bias it will get merged and this buffer will be used */
+  layer->bias.bufSize = num_outnodes;
+  layer->bias.ptr = (float *)my_malloc(num_outnodes * sizeof(float));
+  memset(layer->bias.ptr, 0, num_outnodes);
+}
+
+typedef struct tidlMulParams {
+  float scale;
+} tidlMulParams;
+
+void tidlImportMul(void *params, void * ptr_unused)
+{
+  sTIDL_LayerPC_t *layer;
+  tidlMulParams *mul_params;
+
+  TIDL_IMPORT_DBG_PRINT("----- Importing multiply layer ----- \n");
+  layer = GET_LAYER_PTR;
+  layer->layerType = TIDL_ScaleLayer;
+  layer->outData[0].dataId = GET_DATA_INDEX;
+  mul_params = (tidlMulParams *)params;
+  printf("Scale is %f\n", mul_params->scale);
+}
+
 void tidlImportOutData(int num_inputs)
 {
   sTIDL_LayerPC_t *layer;
@@ -610,16 +675,16 @@ void tidlImportLinkNodes(InOutNodes *inOutNodes, void *ptr_unused)
     }
   }
   else {
+    sTIDL_LayerPC_t *layer0 = &orgTIDLNetStructure.TIDLPCLayers[0];
     TIDL_IMPORT_DBG_PRINT("Number of input nodes is 0. This is the first layer after input data layer.\n");
     if(tidlImpState.layerIndex > 1) {
-      TIDL_IMPORT_DBG_PRINT("Error! This should be the first node.\n");
-      exit(0);
+      TIDL_IMPORT_DBG_PRINT("Another layer uses input data.\n");
     }
     
     // Connect to first layer which should be a data layer
-    TIDL_IMPORT_DBG_PRINT2("Frist layer is %s\n", (char*)orgTIDLNetStructure.TIDLPCLayers[0].outDataNames[0]);
-    strcpy((char*)layer->inDataNames[0], (char*)orgTIDLNetStructure.TIDLPCLayers[0].outDataNames[0]);
-    orgTIDLNetStructure.TIDLPCLayers[0].outConsumerCnt[0] = 1;
+    TIDL_IMPORT_DBG_PRINT2("Frist layer is %s\n", (char*)layer0->outDataNames[0]);
+    strcpy((char*)layer->inDataNames[0], (char*)layer0->outDataNames[0]);
+    layer0->outConsumerCnt[0] += 1;
   }
 
   // fill in output node names

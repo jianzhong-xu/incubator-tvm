@@ -55,12 +55,12 @@ int32_t tidl_linkInputTensors(sTIDL_OrgNetwork_t  *pOrgTIDLNetStructure, int32_t
     for (i1 = layerIndex - 1; i1 >= 0; i1--)
     {
       pSearchLayer = &pOrgTIDLNetStructure->TIDLPCLayers[i1];
-      TIDL_IMPORT_DBG_PRINT3("search layer %d's numOutBufs is %d\n", i1, pSearchLayer->numOutBufs);
+      //TIDL_IMPORT_DBG_PRINT3("search layer %d's numOutBufs is %d\n", i1, pSearchLayer->numOutBufs);
       for (i2 = 0; i2 < pSearchLayer->numOutBufs; i2++)
       {
 #ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
-        printf("CurrentLayer inDataNames[%d]: %s, searchLayer outDataNames[%d]: %s\n", 
-               i0, pCurrentLayer->inDataNames[i0], i2, pSearchLayer->outDataNames[i2]);
+      //  printf("CurrentLayer inDataNames[%d]: %s, searchLayer outDataNames[%d]: %s\n", 
+      //         i0, pCurrentLayer->inDataNames[i0], i2, pSearchLayer->outDataNames[i2]);
 #endif
         if (pSearchLayer->outConsumerLinked[i2] < pSearchLayer->outConsumerCnt[i2])
         {
@@ -69,8 +69,8 @@ int32_t tidl_linkInputTensors(sTIDL_OrgNetwork_t  *pOrgTIDLNetStructure, int32_t
           {
             pCurrentLayer->inData[i0].dataId = pSearchLayer->outData[i2].dataId;
 #ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
-            printf("Found layer %d's input tensor, inData[%d].dataId = layer %d's outData[%d].dataId: %d\n", 
-                   layerIndex, i0, i1, i2, pSearchLayer->outData[i2].dataId);
+      //      printf("Found layer %d's input tensor, inData[%d].dataId = layer %d's outData[%d].dataId: %d\n", 
+      //             layerIndex, i0, i1, i2, pSearchLayer->outData[i2].dataId);
 #endif
             pSearchLayer->outConsumerLinked[i2]++;
           }
@@ -435,6 +435,7 @@ int32_t tidl_mergeBNLayer(sTIDL_OrgNetwork_t  *pOrgTIDLNetStructure, int32_t lay
   {
     if (pOrgTIDLNetStructure->TIDLPCLayers[i1].layerType == TIDL_BatchNormLayer)
     {
+      TIDL_IMPORT_DBG_PRINT2("Merging BN layer, layer %d\n", i1);
       int32_t  idx = tidl_getInLayer(pOrgTIDLNetStructure, layerIndex, pOrgTIDLNetStructure->TIDLPCLayers[i1].inData[0].dataId);
       if (idx == -1)
       {
@@ -446,6 +447,7 @@ int32_t tidl_mergeBNLayer(sTIDL_OrgNetwork_t  *pOrgTIDLNetStructure, int32_t lay
       if ((TIDLPCLayers->layerType == TIDL_ConvolutionLayer) &&
         (TIDLPCLayers->outConsumerCnt[0] == 1))
       {
+        TIDL_IMPORT_DBG_PRINT("Merging BN layer, found input conv layer good to merge with BN.\n");
         TIDLPCLayers->numMacs += pOrgTIDLNetStructure->TIDLPCLayers[i1].numMacs;
         TIDLPCLayers->outData[0] = pOrgTIDLNetStructure->TIDLPCLayers[i1].outData[0];
         strcpy((char *)TIDLPCLayers->outDataNames[0], (char *)pOrgTIDLNetStructure->TIDLPCLayers[i1].outDataNames[0]);
@@ -1769,7 +1771,7 @@ int32_t tidl_addOutDataLayer(sTIDL_Network_t  *tIDLNetStructure, int32_t tiLayer
   }
 
 #ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
-  printf("Added data layer, numInBufs = %d, numOutBufs = %d, input and output dimensions: ", 
+  printf("Added data layer, numInBufs = %d, numOutBufs = %d\n, input and output dimensions: \n", 
          tIDLNetStructure->TIDLLayers[tiLayerIndex].numInBufs,
          tIDLNetStructure->TIDLLayers[tiLayerIndex].numOutBufs);
   for (j = 0; j < TIDL_DIM_MAX; j++)
