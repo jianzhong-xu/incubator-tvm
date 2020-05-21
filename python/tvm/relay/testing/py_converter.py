@@ -95,8 +95,8 @@ class PythonConverter(ExprFunctor):
 
         # necessary pass: SimplifyInference (otherwise we can't generate code for some operators)
         # and fusion (to get primitive functions)
-        opts = relay.transform.Sequential([relay.transform.SimplifyInference(),
-                                           relay.transform.FuseOps(fuse_opt_level=0)])
+        opts = tvm.transform.Sequential([relay.transform.SimplifyInference(),
+                                         relay.transform.FuseOps(fuse_opt_level=0)])
         mod = opts(mod)
         optimized = mod['main']
         return optimized if isinstance(unwrapped, Function) else optimized.body
@@ -190,7 +190,7 @@ class PythonConverter(ExprFunctor):
         if name_var is None:
             func_name = self.generate_function_name('_anon_func')
         if isinstance(name_var, GlobalVar):
-            func_name = name_var.name_hint
+            func_name = str(name_var.name_hint)
         if isinstance(name_var, Var):
             func_name = self.get_var_name(name_var)
 
@@ -411,7 +411,7 @@ class PythonConverter(ExprFunctor):
     def visit_global_var(self, gvar: Expr):
         # we don't need to add numbers to global var names because
         # the *names* are checked for uniqueness in the mod
-        return (Name(gvar.name_hint, Load()), [])
+        return (Name(str(gvar.name_hint), Load()), [])
 
 
     def visit_let(self, letexp: Expr):

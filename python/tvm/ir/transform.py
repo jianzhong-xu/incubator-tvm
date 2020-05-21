@@ -70,13 +70,17 @@ class PassContext(tvm.runtime.Object):
 
     disabled_pass : Optional[Union[List[str], Set[str], Tuple[str]]]
         The list of passes that are disabled.
+
+    config : Optional[Dict[str, Object]]
+        Additional configurations for specific passes.
     """
     def __init__(self,
                  opt_level=2,
                  fallback_device=_nd.cpu(),
                  required_pass=None,
                  disabled_pass=None,
-                 trace=None):
+                 trace=None,
+                 config=None):
         if isinstance(fallback_device, str):
             fallback_device = _nd.context(fallback_device).device_type
         elif isinstance(fallback_device, tvm.runtime.TVMContext):
@@ -97,7 +101,7 @@ class PassContext(tvm.runtime.Object):
 
         self.__init_handle_by_constructor__(_ffi_transform_api.PassContext, opt_level,
                                             fallback_device, required,
-                                            disabled, trace)
+                                            disabled, trace, config)
 
     def __enter__(self):
         _ffi_transform_api.EnterPassContext(self)
@@ -157,11 +161,6 @@ class Sequential(Pass):
     """A pass that works on a sequence of pass objects. Multiple passes can be
     executed sequentially using this class.
 
-    Some typical usage of the sequential pass are:
-    1. Users provide a list of passes for optimization.
-    2. Only an optimization level is provided so that the backend system has
-    to glob all passes at this level and below to perform the optimizations.
-
     Note that users can also provide a series of passes that they don't want to
     apply when running a sequential pass. Pass dependency will be resolved in
     the backend as well.
@@ -173,6 +172,9 @@ class Sequential(Pass):
 
     opt_level : Optional[int]
         The optimization level of this sequential pass.
+        The opt_level of a default sequential pass is set to 0.
+        Note that some of the passes within the Sequantial may still not be executed
+        if their opt_level is higher than the provided opt_level.
 
     name : Optional[str]
         The name of the sequential pass.
@@ -329,7 +331,7 @@ def module_pass(pass_func=None, opt_level=None, name=None, required=None):
     return create_module_pass
 
 
-def PrintIR(header):
+def PrintIR(header="", show_meta_data=False):
     """A special trace pass that prints the header and IR.
 
     Parameters
@@ -337,8 +339,11 @@ def PrintIR(header):
     header : str
         The header to be displayed along with the dump.
 
+    show_meta_data : bool
+        A boolean flag to indicate if meta data should be printed.
+
     Returns
     --------
     The pass
     """
-    return _ffi_transform_api.PrintIR(header)
+    return _ffi_transform_api.PrintIR(header, show_meta_data)

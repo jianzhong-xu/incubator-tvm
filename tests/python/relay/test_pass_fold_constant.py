@@ -24,12 +24,31 @@ from tvm.relay.testing import run_infer_type, create_workload
 
 
 def run_opt_pass(expr, opt_pass):
-    assert isinstance(opt_pass, transform.Pass)
+    assert isinstance(opt_pass, tvm.transform.Pass)
 
     mod = tvm.IRModule.from_expr(expr)
     mod = opt_pass(mod)
     entry = mod["main"]
     return entry if isinstance(expr, relay.Function) else entry.body
+
+
+def test_concatenate_const():
+    def before():
+        data = tvm.nd.array(np.array([1.0, 2.0, 3.0]))
+        const = relay.const(data)
+        concat = relay.op.concatenate([const, const], axis=0)
+        func = relay.Function([], concat)
+        return func
+
+    def expected():
+        data = tvm.nd.array(np.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0]))
+        const = relay.const(data)
+        func = relay.Function([], const)
+        return func
+
+    zz = run_opt_pass(before(), transform.FoldConstant())
+    zexpected = run_opt_pass(expected(), transform.InferType())
+    assert tvm.ir.structural_equal(zz, zexpected)
 
 
 def test_fold_const():
@@ -51,11 +70,13 @@ def test_fold_const():
         z = relay.add(y, relay.const(c_data))
         return relay.Function([x], z)
 
-    def fail(x):
-        raise RuntimeError()
+    def FailPass():
+        def _transform(m, *args):
+            raise RuntimeError()
+        return tvm.transform.module_pass(_transform, opt_level=0)
 
     # the fold constant should work on any context.
-    with tvm.target.build_config(add_lower_pass=[(0, fail)]):
+    with tvm.target.build_config(add_lower_pass=[(0, FailPass())]):
         with tvm.target.create("cuda"):
             zz = run_opt_pass(before(), transform.FoldConstant())
     zexpected = run_opt_pass(expected(), transform.InferType())
@@ -174,7 +195,7 @@ def test_fold_batch_norm():
         add = relay.add(conv, bias)
         return relay.Function(relay.analysis.free_vars(add), add)
 
-    remove_bn_pass = transform.Sequential([
+    remove_bn_pass = tvm.transform.Sequential([
         relay.transform.InferType(),
         relay.transform.SimplifyInference(),
         relay.transform.FoldConstant(),

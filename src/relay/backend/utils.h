@@ -32,7 +32,6 @@
 #include <tvm/relay/type.h>
 #include <tvm/target/codegen.h>
 #include <tvm/te/operation.h>
-#include <tvm/tir/ir_pass.h>
 
 #include <string>
 #include <typeinfo>
@@ -215,6 +214,5 @@ inline const CallNode* GetRootCall(const CallNode* current_call, int depth,
 }  // namespace backend
 }  // namespace relay
 }  // namespace tvm
-
 
 #endif  // TVM_RELAY_BACKEND_UTILS_H_

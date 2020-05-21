@@ -16,10 +16,10 @@
 # under the License.
 #pylint: disable=invalid-name, unused-argument, len-as-condition
 """Backend compiler related feature registration"""
-import topi
 
 from tvm.runtime import convert
 from tvm.te.hybrid import script
+import topi
 from topi.util import get_const_tuple
 from .op import register_compute, register_shape_func
 from .op import register_broadcast_schedule, register_injective_schedule
@@ -27,10 +27,19 @@ from .op import register_pattern, OpPattern
 
 
 register_broadcast_schedule("log")
+register_broadcast_schedule("log2")
+register_broadcast_schedule("log10")
 register_broadcast_schedule("tan")
 register_broadcast_schedule("cos")
+register_broadcast_schedule("cosh")
 register_broadcast_schedule("sin")
+register_broadcast_schedule("sinh")
+register_broadcast_schedule("acos")
+register_broadcast_schedule("acosh")
+register_broadcast_schedule("asin")
+register_broadcast_schedule("asinh")
 register_broadcast_schedule("atan")
+register_broadcast_schedule("atanh")
 register_broadcast_schedule("exp")
 register_broadcast_schedule("erf")
 register_broadcast_schedule("sqrt")
@@ -53,6 +62,7 @@ register_broadcast_schedule("copy")
 register_broadcast_schedule("logical_not")
 register_broadcast_schedule("logical_and")
 register_broadcast_schedule("logical_or")
+register_broadcast_schedule("logical_xor")
 register_broadcast_schedule("bitwise_not")
 register_broadcast_schedule("bitwise_and")
 register_broadcast_schedule("bitwise_or")
@@ -205,6 +215,7 @@ register_shape_func("mod", False, broadcast_shape_func)
 register_shape_func("floor_mod", False, broadcast_shape_func)
 register_shape_func("logical_and", False, broadcast_shape_func)
 register_shape_func("logical_or", False, broadcast_shape_func)
+register_shape_func("logical_xor", False, broadcast_shape_func)
 register_shape_func("bitwise_not", False, broadcast_shape_func)
 register_shape_func("bitwise_and", False, broadcast_shape_func)
 register_shape_func("bitwise_or", False, broadcast_shape_func)

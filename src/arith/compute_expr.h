@@ -25,8 +25,10 @@
 #define TVM_ARITH_COMPUTE_EXPR_H_
 
 #include <tvm/tir/expr.h>
-#include <limits>
+#include <tvm/tir/op.h>
+
 #include <algorithm>
+#include <limits>
 
 namespace tvm {
 namespace arith {
@@ -38,7 +40,7 @@ namespace arith {
  * \tparam Op the computation operator
  * \return The result.
  */
-template<typename OP>
+template <typename OP>
 inline PrimExpr Compute(PrimExpr lhs, PrimExpr rhs) {
   return OP::make(lhs, rhs);
 }
@@ -51,67 +53,45 @@ inline PrimExpr Compute(PrimExpr lhs, PrimExpr rhs) {
  * \tparam Op The computation operator
  * \return The result.
  */
-template<typename Op>
-inline PrimExpr ComputeReduce(
-    const Array<PrimExpr>& values, PrimExpr empty_value);
+template <typename Op>
+inline PrimExpr ComputeReduce(const Array<PrimExpr>& values, PrimExpr empty_value);
 
-inline bool GetConst(PrimExpr e, int64_t* out) {
-  if (e.dtype().is_vector()) return false;
-  const int64_t* v = tir::as_const_int(e);
-  if (v) {
-    *out = *v; return true;
-  } else {
-    return false;
-  }
-}
-
-// get a small constant int
-inline bool GetConstInt(PrimExpr e, int* out) {
-  int64_t v1 = 0;
-  if (GetConst(e, &v1)) {
-    if (v1 > static_cast<int64_t>(
-            std::numeric_limits<int>::max())) return false;
-    *out = static_cast<int>(v1); return true;
-  }
-  return false;
-}
-
-template<>
+template <>
 inline PrimExpr Compute<tir::AddNode>(PrimExpr a, PrimExpr b) {
   return a + b;
 }
 
-template<>
+template <>
 inline PrimExpr Compute<tir::SubNode>(PrimExpr a, PrimExpr b) {
   return a - b;
 }
 
-template<>
+template <>
 inline PrimExpr Compute<tir::MulNode>(PrimExpr a, PrimExpr b) {
   return a * b;
 }
 
-template<>
+template <>
 inline PrimExpr Compute<tir::DivNode>(PrimExpr a, PrimExpr b) {
   return truncdiv(a, b);
 }
 
-template<>
+template <>
 inline PrimExpr Compute<tir::ModNode>(PrimExpr a, PrimExpr b) {
   return truncmod(a, b);
 }
 
-template<>
+template <>
 inline PrimExpr Compute<tir::MaxNode>(PrimExpr a, PrimExpr b) {
   return max(a, b);
 }
 
-template<>
+template <>
 inline PrimExpr Compute<tir::MinNode>(PrimExpr a, PrimExpr b) {
   return min(a, b);
 }
 
-template<typename Op>
+template <typename Op>
 inline PrimExpr ComputeReduce(const Array<PrimExpr>& values, PrimExpr empty_value) {
   if (values.size() == 0U) {
     CHECK(empty_value.defined());
@@ -126,4 +106,4 @@ inline PrimExpr ComputeReduce(const Array<PrimExpr>& values, PrimExpr empty_valu
 
 }  // namespace arith
 }  // namespace tvm
-#endif   // TVM_ARITH_COMPUTE_EXPR_H_
+#endif  // TVM_ARITH_COMPUTE_EXPR_H_

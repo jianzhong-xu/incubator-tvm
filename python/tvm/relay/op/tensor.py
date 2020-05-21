@@ -47,6 +47,36 @@ def log(data):
     """
     return _make.log(data)
 
+def log2(data):
+    """Compute elementwise log to the base 2 of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.log2(data)
+
+def log10(data):
+    """Compute elementwise log to the base 10 of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.log10(data)
+
 def tan(data):
     """Compute elementwise tan of data.
 
@@ -77,6 +107,21 @@ def cos(data):
     """
     return _make.cos(data)
 
+def cosh(data):
+    """Compute elementwise cosh of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.cosh(data)
+
 def sin(data):
     """Compute elementwise sin of data.
 
@@ -92,6 +137,81 @@ def sin(data):
     """
     return _make.sin(data)
 
+def sinh(data):
+    """Compute elementwise sinh of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.sinh(data)
+
+def acos(data):
+    """Compute elementwise acos of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.acos(data)
+
+def acosh(data):
+    """Compute elementwise acosh of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.acosh(data)
+
+def asin(data):
+    """Compute elementwise asin of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.asin(data)
+
+def asinh(data):
+    """Compute elementwise asinh of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.asinh(data)
+
 def atan(data):
     """Compute elementwise atan of data.
 
@@ -106,6 +226,21 @@ def atan(data):
         The computed result.
     """
     return _make.atan(data)
+
+def atanh(data):
+    """Compute elementwise atanh of data.
+
+    Parameters
+    ----------
+    data : relay.Expr
+        The input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.atanh(data)
 
 def exp(data):
     """Compute elementwise exp of data.
@@ -536,6 +671,23 @@ def logical_or(lhs, rhs):
     """
     return _make.logical_or(lhs, rhs)
 
+
+def logical_xor(lhs, rhs):
+    """logical XOR with numpy-style broadcasting.
+
+    Parameters
+    ----------
+    lhs : relay.Expr
+        The left hand side input data
+    rhs : relay.Expr
+        The right hand side input data
+
+    Returns
+    -------
+    result : relay.Expr
+        The computed result.
+    """
+    return _make.logical_xor(lhs, rhs)
 
 def bitwise_and(lhs, rhs):
     """bitwise AND with numpy-style broadcasting.
