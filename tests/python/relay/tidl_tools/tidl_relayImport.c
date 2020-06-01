@@ -461,8 +461,6 @@ void tidlImportPad(int size, void *padTensor)
     TIDL_IMPORT_DBG_PRINT2("%d ", layer->layerPCParams.padParams.padTensor[i]);
   }
   TIDL_IMPORT_DBG_PRINT("]\n");
- 
-  //return TIDL_IMPORT_NO_ERR;
 }
 
 void tidlImportAdd()
@@ -489,15 +487,6 @@ void tidlImportBiasAdd(int numParams, char *dtype, void *biasParams)
   layer = GET_LAYER_PTR;
 
   if(strcmp(dtype, "float32") == 0) {
-#ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
-    printf("BiasAdd params are float32, number of params is %d\n", numParams);
-    float * params = (float *)biasParams;
-    for(i=0;i<10;i++)
-    {
-      printf("%f, ", params[i]);
-    }
-    printf("\n");
-#endif
     // Allocate memory to store weights. To be freed after writing weights to file.
     size = (size_t)numParams*sizeof(float);
     layer->bias.bufSize = numParams;
@@ -571,6 +560,8 @@ void tidlImportDense(int num_innodes, int num_outnodes, void *weights)
 {
   sTIDL_LayerPC_t *layer;
   sTIDL_InnerProductParams_t *ip_params;
+  int i;
+  float *bias_ptr;
   size_t size;
 
   TIDL_IMPORT_DBG_PRINT("----- Importing dense layer ----- \n");
@@ -586,7 +577,6 @@ void tidlImportDense(int num_innodes, int num_outnodes, void *weights)
     printf("Dense params: number of input nodes is %d, number of output nodes is %d\n",
             num_innodes, num_outnodes);
     float * params = (float *)weights;
-    int i;
     for(i=0;i<10;i++)
     {
       printf("%f, ", params[i]);
@@ -594,14 +584,19 @@ void tidlImportDense(int num_innodes, int num_outnodes, void *weights)
     printf("\n");
 #endif
   // Allocate memory to store weights. To be freed after writing weights to file.
-  size = sizeof(float)*(size_t)num_innodes*num_outnodes;
+  layer->weights.bufSize = num_innodes*num_outnodes;
+  size = sizeof(float)*(size_t)layer->weights.bufSize;
   layer->weights.ptr = (float *)my_malloc(size);
   memcpy(layer->weights.ptr, weights, size);
 
-  /* Set default bias as zero, if next layer has bias it will get merged and this buffer will be used */
+  // Set default bias as zero, if next layer has bias it will get merged and this buffer will be used
   layer->bias.bufSize = num_outnodes;
-  layer->bias.ptr = (float *)my_malloc(num_outnodes * sizeof(float));
-  memset(layer->bias.ptr, 0, num_outnodes);
+  bias_ptr = (float *)my_malloc(num_outnodes * sizeof(float));
+  for(i=0; i<num_outnodes; i++)
+  {
+    bias_ptr[i] = 0.0;
+  }
+  layer->bias.ptr = (void *)bias_ptr;
 }
 
 typedef struct tidlMulParams {
@@ -646,17 +641,21 @@ void tidlImportOutData(int num_inputs)
  *   - tidl_linkOutputTensors()
 ==============================================================================*/
 // It seems Python calling C has to have at least 2 arguments -- to find out
-void tidlImportLinkNodes(InOutNodes *inOutNodes, void *ptr_unused)
+int tidlImportLinkNodes(InOutNodes *inOutNodes, void *ptr_unused)
 {
   sTIDL_LayerPC_t *layer;
   int i;
   int32_t *in_nodes;
   char str[10];
 
-  TIDL_IMPORT_DBG_PRINT2("----- Fill tensor names for layer %d -----\n", inOutNodes->this_node);
+  TIDL_IMPORT_DBG_PRINT2("----- Fill tensor names for layer \"%d\" -----\n", inOutNodes->this_node);
   TIDL_IMPORT_DBG_PRINT2("Number of input nodes: %d\n", inOutNodes->num_in_nodes);
   TIDL_IMPORT_DBG_PRINT2("Number of output nodes: %d\n", inOutNodes->num_out_nodes);
 
+  if(tidlImpState.layerIndex >= TIDL_NUM_MAX_LAYERS) {
+    printf("\nError! Number of layers exceeds TIDL limit.\n");
+    return TIDL_IMPORT_FAILURE;
+  }
   layer = GET_LAYER_PTR;
   
   // change node index to layer name
@@ -668,23 +667,26 @@ void tidlImportLinkNodes(InOutNodes *inOutNodes, void *ptr_unused)
     in_nodes = (int32_t *)inOutNodes->in_nodes;
     for(i=0; i<inOutNodes->num_in_nodes; i++)
     {
-      // input data name is the name of the input node 
-      sprintf(str, "%d", in_nodes[i]);
-      strcpy((char*)layer->inDataNames[i], str);
+      if(in_nodes[i] >= 0) {
+        // use unique input node number as input data name
+        sprintf(str, "%d", in_nodes[i]);
+        strcpy((char*)layer->inDataNames[i], str);
+      }
+      else {
+        // if input node number is "-1", it is the input tensor to the subgraph
+        // - refer to Python wrapper function find_in_nodes()
+        sTIDL_LayerPC_t *layer0 = &orgTIDLNetStructure.TIDLPCLayers[0];
+        // Connect to first layer which should be a data layer
+        TIDL_IMPORT_DBG_PRINT2("This layer uses first layer \"%s\"\n", (char*)layer0->outDataNames[0]);
+        strcpy((char*)layer->inDataNames[i], (char*)layer0->outDataNames[0]);
+        layer0->outConsumerCnt[0] += 1;
+      }
       TIDL_IMPORT_DBG_PRINT4("Layer %d's input node %d name: %s\n", inOutNodes->this_node, i, str);
     }
   }
   else {
-    sTIDL_LayerPC_t *layer0 = &orgTIDLNetStructure.TIDLPCLayers[0];
-    TIDL_IMPORT_DBG_PRINT("Number of input nodes is 0. This is the first layer after input data layer.\n");
-    if(tidlImpState.layerIndex > 1) {
-      TIDL_IMPORT_DBG_PRINT("Another layer uses input data.\n");
-    }
-    
-    // Connect to first layer which should be a data layer
-    TIDL_IMPORT_DBG_PRINT2("Frist layer is %s\n", (char*)layer0->outDataNames[0]);
-    strcpy((char*)layer->inDataNames[0], (char*)layer0->outDataNames[0]);
-    layer0->outConsumerCnt[0] += 1;
+    TIDL_IMPORT_DBG_PRINT2("\nError! Layer \"%d\" doesn't have any input nodes.\n", inOutNodes->this_node);
+    return TIDL_IMPORT_FAILURE;
   }
 
   // fill in output node names
@@ -724,16 +726,18 @@ void tidlImportLinkNodes(InOutNodes *inOutNodes, void *ptr_unused)
   TIDL_IMPORT_DBG_PRINT3("Layer %d's numInBufs: %d\n", tidlImpState.layerIndex, orgTIDLNetStructure.TIDLPCLayers[tidlImpState.layerIndex].numInBufs);
   tidlImpState.layerIndex++;
   TIDL_IMPORT_DBG_PRINT2("Number of layers imported to TIDL: %d\n", tidlImpState.layerIndex);
+
+  return TIDL_IMPORT_SUCCESS;
 } // tidlImportLinkNodes()
 
 
-void tidl_printLayerparams(sTIDL_Network_t  *tIDLNetStructure, int graphId)
+void tidl_printLayerparams(sTIDL_Network_t  *tIDLNetStructure, int subgraph_id)
 {
   int i, j;
   char    str[30];
   FILE *fp_params;
   
-  sprintf(str, "layer_params_%d.txt", graphId);
+  sprintf(str, "layer_params_%d.txt", subgraph_id);
   fp_params = fopen(str, "w");
 
   fprintf(fp_params, "Network parameters: %d, %d, %d, %d, %d, %d, %d\n", 
@@ -838,10 +842,6 @@ void tidl_printLayerparams(sTIDL_Network_t  *tIDLNetStructure, int graphId)
     if(tIDLNetStructure->TIDLLayers[i].layerType == TIDL_ConvolutionLayer)
     {
       sTIDL_ConvParams_t *convParams = &tIDLNetStructure->TIDLLayers[i].layerParams.convParams;
-      //if(i==1 || i==4 || i==8 || i==12 || i==24) 
-      //{
-      //  convParams->padW = convParams->padH = 1; 
-      //}
       fprintf(fp_params, "Layer %d, conv2d layer parameters: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", i, 
              convParams->convolutionType,
              convParams->numInChannels,
@@ -866,19 +866,30 @@ void tidl_printLayerparams(sTIDL_Network_t  *tIDLNetStructure, int graphId)
              convParams->enableRelU   ,
              convParams->kernelType);
     }
+    if(tIDLNetStructure->TIDLLayers[i].layerType == TIDL_EltWiseLayer) 
+    {
+      sTIDL_EltWiseParams_t *eltwiseParams = &tIDLNetStructure->TIDLLayers[i].layerParams.eltWiseParams;
+      fprintf(fp_params, "Layer %d, EltWise layer parameter: %d, %d, %d, %d, %d, %d\n", i,
+              eltwiseParams->numChannels,
+              eltwiseParams->eltWiseType,
+              eltwiseParams->numInData,
+              eltwiseParams->biasQ,
+              eltwiseParams->outDataQ,
+              eltwiseParams->enableRelU);
+    }
   }
 
   fclose(fp_params);
 }
 
 #if 0
-void tidl_printOrigLayerparams(sTIDL_OrgNetwork_t  *tIDLNetStructure, int graphId)
+void tidl_printOrigLayerparams(sTIDL_OrgNetwork_t  *tIDLNetStructure, int subgraph_id)
 {
   int i;
   char    str[30];
   FILE *fp_params;
   
-  sprintf(str, "layer_params_%d.txt", graphId);
+  sprintf(str, "layer_params_orig_%d.txt", subgraph_id);
   fp_params = fopen(str, "w");
 
   fprintf(fp_params, "Network parameters: %d\n", tIDLNetStructure->numLayers);
@@ -967,10 +978,6 @@ void tidl_printOrigLayerparams(sTIDL_OrgNetwork_t  *tIDLNetStructure, int graphI
     if(tIDLNetStructure->TIDLPCLayers[i].layerType == TIDL_ConvolutionLayer)
     {
       sTIDL_ConvParams_t *convParams = &tIDLNetStructure->TIDLPCLayers[i].layerParams.convParams;
-      //if(i==1 || i==4 || i==8 || i==12 || i==24) 
-      //{
-      //  convParams->padW = convParams->padH = 1; 
-      //}
       fprintf(fp_params, "Layer %d, conv2d layer parameters: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", i, 
              convParams->convolutionType,
              convParams->numInChannels,
@@ -995,22 +1002,33 @@ void tidl_printOrigLayerparams(sTIDL_OrgNetwork_t  *tIDLNetStructure, int graphI
              convParams->enableRelU   ,
              convParams->kernelType);
     }
+    if(tIDLNetStructure->TIDLPCLayers[i].layerType == TIDL_EltWiseLayer) 
+    {
+      sTIDL_EltWiseParams_t *eltwiseParams = &tIDLNetStructure->TIDLPCLayers[i].layerParams.eltWiseParams;
+      fprintf(fp_params, "Layer %d, EltWise layer parameter: %d, %d, %d, %d, %d, %d\n", i,
+              eltwiseParams->numChannels,
+              eltwiseParams->eltWiseType,
+              eltwiseParams->numInData,
+              eltwiseParams->biasQ,
+              eltwiseParams->outDataQ,
+              eltwiseParams->enableRelU);
+    }
   }
 
   fclose(fp_params);
 } // tidl_printOrigLayerparams
 #endif
 
-int tidlImportOptimize(char * artifacts_folder, int graphId)
+int tidlImportOptimize(char *net_file, char *params_file, int subgraph_id)
 {
   int32_t importStatus, i, numErrs, numUnsupportedLayers, tiLayerIndex;
   FILE    *fpNetFile;
   FILE    *fpParamsFile;
-  char    str[100];
 
   numErrs = 0;
-  TIDL_IMPORT_DBG_PRINT2("TIDL artifacts folder: %s\n", artifacts_folder);
-  TIDL_IMPORT_DBG_PRINT2("TIDL import graph: %d\n", graphId);
+  TIDL_IMPORT_DBG_PRINT2("TIDL net file: %s\n", net_file);
+  TIDL_IMPORT_DBG_PRINT2("TIDL params file: %s\n", params_file);
+  TIDL_IMPORT_DBG_PRINT2("TIDL import graph: %d\n", subgraph_id);
   TIDL_IMPORT_DBG_PRINT("----- Optimize TIDL -----\n");
   TIDL_IMPORT_DBG_PRINT2("number of layers: %d\n", tidlImpState.layerIndex);
 #ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
@@ -1102,9 +1120,9 @@ int tidlImportOptimize(char * artifacts_folder, int graphId)
     numErrs++;
   }
 
-  TIDL_IMPORT_DBG_PRINT("Updating out data shapes.\n");
-  tidl_updateOutDataShape(&orgTIDLNetStructure, 0, tidlImpState.layerIndex, (sTIDL_outRehapeMap_t *)&sTIDL_outRehapeTable);
-  TIDL_IMPORT_DBG_PRINT("Out data shapes updated.\n");
+//  TIDL_IMPORT_DBG_PRINT("Updating out data shapes.\n");
+//  tidl_updateOutDataShape(&orgTIDLNetStructure, 0, tidlImpState.layerIndex, (sTIDL_outRehapeMap_t *)&sTIDL_outRehapeTable);
+//  TIDL_IMPORT_DBG_PRINT("Out data shapes updated.\n");
 
   importStatus = tidl_mergeReshapeLayer(&orgTIDLNetStructure, tidlImpState.layerIndex, (sTIDL_outRehapeMap_t *)&sTIDL_outRehapeTable);
   if(importStatus != TIDL_IMPORT_NO_ERR)
@@ -1122,8 +1140,7 @@ int tidlImportOptimize(char * artifacts_folder, int graphId)
   tidl_importEltWiseParams(&orgTIDLNetStructure, tidlImpState.layerIndex);
 
   /* Quantize and write out layer params */
-  sprintf(str, "%stidl_subgraph%d_params.bin", artifacts_folder, graphId);
-  fpParamsFile = fopen(str, "wb+");
+  fpParamsFile = fopen(params_file, "wb+");
   TIDL_importQuantWriteLayerParams(&orgTIDLNetStructure, tidlImpState.layerIndex, fpParamsFile);
   fclose(fpParamsFile);
 
@@ -1155,10 +1172,9 @@ int tidlImportOptimize(char * artifacts_folder, int graphId)
 
   tidl_addOutDataLayer(&tIDLNetStructure, tiLayerIndex);
 
-  tidl_printLayerparams(&tIDLNetStructure, graphId);
+  tidl_printLayerparams(&tIDLNetStructure, subgraph_id);
 
-  sprintf(str, "%stidl_subgraph%d_net.bin", artifacts_folder, graphId);
-  fpNetFile = fopen(str, "wb+");
+  fpNetFile = fopen(net_file, "wb+");
   fwrite(&tIDLNetStructure,1,sizeof(tIDLNetStructure),fpNetFile);
 
   fclose(fpNetFile);

@@ -546,6 +546,10 @@ int32_t tidl_mergeReluLayer(sTIDL_OrgNetwork_t  *pOrgTIDLNetStructure, int32_t l
         pOrgTIDLNetStructure->TIDLPCLayers[i1].numOutBufs = -1;
       }
     }
+    else
+    {
+      printf("TIDL_ReLULayer cannot be merged. Standalone ReLU is not supported.\n");
+    }
   }
 
   return TIDL_IMPORT_NO_ERR;
@@ -1056,10 +1060,6 @@ int32_t TIDL_QuantizeUnsignedMax(uint8_t * params, float * data, int32_t dataSiz
   int32_t param;
   int32_t offset;
 
-#ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
-  printf("max = %e, min = %e, absRange = %e, numBits = %d, quantPrec = %e\n",
-         max, min, absRange, numBits, quantPrec);
-#endif
   if ((quantPrec * 256) > INT32_MAX)
   {
     quantPrec = INT32_MAX / 256;
@@ -1145,29 +1145,6 @@ void TIDL_importQuantWriteLayerParams(sTIDL_OrgNetwork_t   *pOrgTIDLNetStructure
         uint8_t * params  = (uint8_t *)malloc(dataSize * ((weightsElementSizeInBits-1)/8 + 1));
         TIDL_findRange(data, dataSize, &min , &max, 1.0);
 
-        {
-          int ii;
-          FILE *fp_w;
-          if(i==1) 
-          {
-            fp_w = fopen("weights1.txt","w");
-            fprintf(fp_w, "min = %e, max = %e\n", min, max);
-            for(ii=0; ii<dataSize; ii++)
-            {
-              fprintf(fp_w,"%e\n", data[ii]);
-            }
-            fclose(fp_w);
-          }
-#ifdef TIDL_IMPORT_ENABLE_DBG_PRINT
-          printf("Layer %d, first 10 weights in quantization: \n", i);
-          for(ii=0; ii<10; ii++) 
-          {
-            printf("%f, ", data[ii]);
-          }
-          printf("weightsElementSizeInBits = %d\n", weightsElementSizeInBits);
-#endif
-        }
-
         pTIDLPCLayers->layerParams.convParams.weightsQ = 
           TIDL_QuantizeUnsignedMax((uint8_t *)params, data, dataSize, min , max, 
                                    NUM_WHGT_BITS, weightsElementSizeInBits, &zeroWeightValue);
@@ -1177,19 +1154,6 @@ void TIDL_importQuantWriteLayerParams(sTIDL_OrgNetwork_t   *pOrgTIDLNetStructure
         printf("NUM_WHGT_BITS = %d, weightsElementSizeInBits = %d\n", NUM_WHGT_BITS, weightsElementSizeInBits);
         printf("weightsQ = %d, zeroWeightValue = %d\n", pTIDLPCLayers->layerParams.convParams.weightsQ, zeroWeightValue);
 #endif
-        if(i==1) 
-        {
-          int ii;
-          FILE *fp_w;
-          uint16_t * data_q = (uint16_t *)params;
-          fp_w = fopen("weights1_q.txt","w");
-          for(ii=0; ii<dataSize; ii++)
-          {
-            fprintf(fp_w,"%d\n", data_q[ii]);
-          }
-          fclose(fp_w);
-        }
-        
         if(weightsElementSizeInBits > 8)
           fwrite(params,2,dataSize,fp1);
         else
