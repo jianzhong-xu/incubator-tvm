@@ -545,10 +545,11 @@ int32_t tidl_mergeReluLayer(sTIDL_OrgNetwork_t  *pOrgTIDLNetStructure, int32_t l
         pOrgTIDLNetStructure->TIDLPCLayers[i1].numInBufs = -1;
         pOrgTIDLNetStructure->TIDLPCLayers[i1].numOutBufs = -1;
       }
-    }
-    else
-    {
-      printf("TIDL_ReLULayer cannot be merged. Standalone ReLU is not supported.\n");
+      else
+      {
+        printf("TIDL_ReLULayer cannot be merged. Standalone ReLU is not supported.\n");
+        return TIDL_IMPORT_ERR_RELU_NOT_MERGED;
+      }
     }
   }
 
@@ -1262,6 +1263,11 @@ void TIDL_importQuantWriteLayerParams(sTIDL_OrgNetwork_t   *pOrgTIDLNetStructure
         uint32_t dataSize = pTIDLPCLayers->weights.bufSize;
         uint8_t * params = (uint8_t *)malloc(dataSize * ((weightsElementSizeInBits - 1) / 8 + 1));
         TIDL_findRange(data, dataSize, &min, &max, 1.0);
+
+        /* In TIDL_QuantizeUnsignedMax function, when the absRange is very small then quantPrec
+           will be very high and can cause overflow so fixed the issue by increasing the absRange */
+        min = min > 0 ? 0 : min;
+        max = max < 0 ? 0 : max;
 
         pTIDLPCLayers->layerParams.batchNormParams.weightsQ =
           TIDL_QuantizeUnsignedMax((uint8_t *)params, data, dataSize, min, max, NUM_WHGT_BITS, weightsElementSizeInBits, &zeroWeightValue);

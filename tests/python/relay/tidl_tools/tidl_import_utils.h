@@ -39,7 +39,7 @@
 #include "ti_dl.h"
 #include "tidl_import.h"
 
-#define TIDL_IMPORT_ENABLE_DBG_PRINT
+//#define TIDL_IMPORT_ENABLE_DBG_PRINT
 
 #define TIDL_DATA_FORMAT_NHWC         0
 #define TIDL_DATA_FORMAT_NCHW         1
@@ -89,6 +89,7 @@
 #define TIDL_IMPORT_ERR_CROP_PARAMS_UNSUPPORTED                26
 #define TIDL_IMPORT_ERR_FLATTEN_PARAMS_UNSUPPORTED             27
 #define TIDL_IMPORT_ERR_BIAS_NOT_MERGED                        28
+#define TIDL_IMPORT_ERR_RELU_NOT_MERGED                        29
 
 #ifdef PLATFORM_64BIT
 #define MAX_NUM_PTRS_TO_STORE (TIDL_NUM_MAX_LAYERS*10)
